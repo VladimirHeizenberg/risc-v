@@ -100,5 +100,49 @@ void CPU::ExecuteRType(Instruction instruction) {
 }
 
 void CPU::ExecuteIType(Instruction instruction) {
-    
+    int32_t imm = instruction.immI();
+    uint32_t rd = instruction.rd();
+    uint32_t rs1 = instruction.rs1();
+    switch (instruction.funct3())
+    {
+    case 0x0: // ADD
+        registers[rd] = registers[rs1] + imm;
+        break;
+    case 0x1: // SHIFT LEFT LOGICAL
+        registers[rd] = registers[rs1] << imm;
+        break;
+    case 0x2: // SET LESS THAN IMM
+        break;
+    case 0x3: // SET LESS THAN IMM (U)
+        break;
+    case 0x4: // XOR
+        registers[rd] = registers[rs1] ^ imm;
+        break;
+    case 0x5:
+        if (true) {} // SHIFT RIGHT LOGICAL IMM
+        else {} // SHIFT LEFT LOGICAL IMM
+        break;
+    case 0x6: // OR
+        registers[rd] = registers[rs1] | imm;
+        break;
+    case 0x7: // AND
+        registers[rd] = registers[rs1] & imm;
+        break;
+    }
+}
+
+void CPU::ExecuteLoad(Instruction instruction) {
+    switch (instruction.funct3())
+    {
+    case 0x0:
+        break;
+    case 0x1:
+        break;
+    case 0x2:
+        break;
+    case 0x4:
+        break;
+    case 0x5:
+        break;
+    }
 }
