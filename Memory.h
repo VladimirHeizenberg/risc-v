@@ -8,14 +8,23 @@
 class Memory {
 public:
     Memory() {
-        memory = std::vector<unsigned char>(Constants::MEMORY_SIZE);
+        memory = std::vector<uint8_t>(Constants::MEMORY_SIZE);
+    }
+
+    void WriteByte(size_t address, uint8_t value) {
+        memory[address] = value;
+    }
+
+    void Write2Bytes(size_t address, uint16_t value) {
+        memory[address] = (uint8_t)(value & (0xFF));
+        memory[address + 1] = (uint8_t)((value >> 8) & (0xFF));
     }
 
     void Write4Bytes(size_t address, uint32_t value) {
-        memory[address] = (unsigned char)(value & (0xFF));
-        memory[address + 1] = (unsigned char)((value >> 8) & (0xFF));
-        memory[address + 2] = (unsigned char)((value >> 16)& (0xFF));
-        memory[address + 3] = (unsigned char)((value >> 24) & (0xFF));
+        memory[address] = (uint8_t)(value & (0xFF));
+        memory[address + 1] = (uint8_t)((value >> 8) & (0xFF));
+        memory[address + 2] = (uint8_t)((value >> 16)& (0xFF));
+        memory[address + 3] = (uint8_t)((value >> 24) & (0xFF));
     }
 
     size_t Read4Bytes(size_t address) {
@@ -31,7 +40,7 @@ public:
         return (size_t)memory[address];
     }
 
-    size_t Read2Byte(size_t address) {
+    size_t Read2Bytes(size_t address) {
         size_t ans = 0;
         ans |= (size_t)memory[address];
         ans |= ((size_t)memory[address + 1] << 8);
@@ -49,5 +58,5 @@ public:
     }
 
 private:
-    std::vector<unsigned char> memory;    
+    std::vector<uint8_t> memory;    
 };

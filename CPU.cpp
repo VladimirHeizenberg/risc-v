@@ -1,6 +1,9 @@
 #include "CPU.h"
 
 void CPU::Execute(Instruction instruction) {
+    if (instruction.rd() == 0) {
+        return;
+    }
     switch (instruction.opcode()) {
     case 0b0110011:
         ExecuteRType(instruction);
@@ -85,6 +88,7 @@ void CPU::ExecuteRType(Instruction instruction) {
             registers[rd] = registers[rs1] % registers[rs2];
             break;
         }
+        break;
     case 0x20:
         switch (instruction.funct3())
         {
@@ -132,17 +136,82 @@ void CPU::ExecuteIType(Instruction instruction) {
 }
 
 void CPU::ExecuteLoad(Instruction instruction) {
+    int32_t imm = instruction.immI();
+    uint32_t rd = instruction.rd();
+    uint32_t rs1 = instruction.rs1();
     switch (instruction.funct3())
     {
     case 0x0:
+        registers[rd] = SignExtension(RAM.ReadByte(rs1 + imm), 8);
         break;
     case 0x1:
+        registers[rd] = SignExtension(RAM.Read2Bytes(rs1 + imm), 16);
         break;
     case 0x2:
+        registers[rd] = SignExtension(RAM.Read4Bytes(rs1 + imm), 32);
         break;
-    case 0x4:
+    case 0x4: // UNSIGNED
+        registers[rd] = RAM.Read2Bytes(rs1 + imm);
         break;
-    case 0x5:
+    case 0x5: // UNSIGNED
+        registers[rd] = RAM.Read4Bytes(rs1 + imm);
+        break;
+    }
+}
+
+void CPU::ExecuteStore(Instruction instruction) {
+    int32_t imm = instruction.immI();
+    uint32_t rs1 = instruction.rs1();
+    uint32_t rs2 = instruction.rs2();
+
+    switch (instruction.funct3()) {
+    case 0x0: // SB
+        RAM.WriteByte(rs1 + imm, (uint8_t)registers[rs2]);
+        break;
+    case 0x1: // SH
+        RAM.Write2Bytes(rs1 + imm, (uint16_t)registers[rs2]);
+        break;
+    case 0x2: // SW
+        RAM.Write4Bytes(rs1 + imm, (uint32_t)registers[rs2]);
+        break;
+    }
+}
+
+void CPU::ExecuteBranch(Instruction instruction) {
+    int32_t imm = instruction.immI();
+    uint32_t rs1 = instruction.rs1();
+    uint32_t rs2 = instruction.rs2();
+
+    switch (instruction.funct3()) {
+    case 0x0: // BEQ
+        if (registers[rs1] == registers[rs2]) {
+            pc += imm;
+        }
+        break;
+    case 0x1: // BNE
+        if (registers[rs1] != registers[rs2]) {
+            pc += imm;
+        }
+        break;
+    case 0x4: // BLT
+        if ((int32_t)registers[rs1] < (int32_t)registers[rs2]) {
+            pc += imm;
+        }
+        break;
+    case 0x5: // BGE
+        if ((int32_t)registers[rs1] >= (int32_t)registers[rs2]) {
+            pc += imm;
+        }
+        break;
+    case 0x6: // BLTU
+        if (registers[rs1] < registers[rs2]) {
+            pc += imm;
+        }
+        break;
+    case 0x7: // BGEU
+        if (registers[rs1] >= registers[rs2]) {
+            pc += imm;
+        }
         break;
     }
 }
