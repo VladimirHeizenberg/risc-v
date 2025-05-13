@@ -1,9 +1,8 @@
 #include "CPU.h"
 
-void CPU::Execute(Instruction instruction) {
-    if (instruction.rd() == 0) {
-        return;
-    }
+// Дай Бог чтоб работало
+
+bool CPU::Execute(Instruction instruction) {
     switch (instruction.opcode()) {
     case 0b0110011:
         ExecuteRType(instruction);
@@ -20,7 +19,21 @@ void CPU::Execute(Instruction instruction) {
     case 0b1100011:
         ExecuteBranch(instruction);
         break;
+    case 0b1110111:
+        if (instruction.immI() == 0x0) {
+            return false;
+        } else if (instruction.immI() == 0x1) {
+            return false;
+        }
+        break;
     }
+    if (instruction.rd() == 0) {
+        registers[0] = 0;
+    }
+    if (instruction.opcode() != 0b1100011) {
+        pc += 4;
+    }
+    return true;
 }
 
 void CPU::ExecuteRType(Instruction instruction) {
@@ -116,15 +129,20 @@ void CPU::ExecuteIType(Instruction instruction) {
         registers[rd] = registers[rs1] << imm;
         break;
     case 0x2: // SET LESS THAN IMM
+        registers[rd] = (registers[rs1] < imm ? 1 : 0);
         break;
     case 0x3: // SET LESS THAN IMM (U)
+        registers[rd] = ((uint32_t)registers[rs1] < imm ? 1 : 0);
         break;
     case 0x4: // XOR
         registers[rd] = registers[rs1] ^ imm;
         break;
     case 0x5:
-        if (true) {} // SHIFT RIGHT LOGICAL IMM
-        else {} // SHIFT LEFT LOGICAL IMM
+        if ((instruction.raw_instr >> 30) & 0x1) {// SRAI
+            registers[rd] = int32_t(registers[rs1]) >> (imm & 0x1F);
+        } else { // SRLI
+            registers[rd] = registers[rs1] >> (imm & 0x1F);
+        }
         break;
     case 0x6: // OR
         registers[rd] = registers[rs1] | imm;
@@ -160,56 +178,56 @@ void CPU::ExecuteLoad(Instruction instruction) {
 }
 
 void CPU::ExecuteStore(Instruction instruction) {
-    int32_t imm = instruction.immI();
+    int32_t imm = instruction.immS();
     uint32_t rs1 = instruction.rs1();
     uint32_t rs2 = instruction.rs2();
 
     switch (instruction.funct3()) {
-    case 0x0: // SB
+    case 0x0: // STORE BYTE
         RAM.WriteByte(rs1 + imm, (uint8_t)registers[rs2]);
         break;
-    case 0x1: // SH
+    case 0x1: // STORE HALF
         RAM.Write2Bytes(rs1 + imm, (uint16_t)registers[rs2]);
         break;
-    case 0x2: // SW
+    case 0x2: // STORE WORD
         RAM.Write4Bytes(rs1 + imm, (uint32_t)registers[rs2]);
         break;
     }
 }
 
 void CPU::ExecuteBranch(Instruction instruction) {
-    int32_t imm = instruction.immI();
+    int32_t imm = instruction.immB();
     uint32_t rs1 = instruction.rs1();
     uint32_t rs2 = instruction.rs2();
 
     switch (instruction.funct3()) {
-    case 0x0: // BEQ
+    case 0x0:
         if (registers[rs1] == registers[rs2]) {
             pc += imm;
         }
         break;
-    case 0x1: // BNE
+    case 0x1:
         if (registers[rs1] != registers[rs2]) {
             pc += imm;
         }
         break;
-    case 0x4: // BLT
-        if ((int32_t)registers[rs1] < (int32_t)registers[rs2]) {
-            pc += imm;
-        }
-        break;
-    case 0x5: // BGE
-        if ((int32_t)registers[rs1] >= (int32_t)registers[rs2]) {
-            pc += imm;
-        }
-        break;
-    case 0x6: // BLTU
+    case 0x4:
         if (registers[rs1] < registers[rs2]) {
             pc += imm;
         }
         break;
-    case 0x7: // BGEU
+    case 0x5:
         if (registers[rs1] >= registers[rs2]) {
+            pc += imm;
+        }
+        break;
+    case 0x6: // UNSIGNED
+        if ((uint32_t)registers[rs1] < (uint32_t)registers[rs2]) {
+            pc += imm;
+        }
+        break;
+    case 0x7: // UNSIGNED
+        if ((uint32_t)registers[rs1] >= (uint32_t)registers[rs2]) {
             pc += imm;
         }
         break;

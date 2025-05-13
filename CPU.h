@@ -25,10 +25,24 @@ struct Instruction {
     uint32_t funct7() {
         return (raw_instr >> 25) & 0x7F;
     }
-    uint32_t immI() {
+    int32_t immI() {
         return (
             ((int32_t)((raw_instr >> 20) & 0xFFF) << 20) >> 20
         );
+    }
+    int32_t immB() {
+        uint32_t imm = 0;
+        imm |= ((raw_instr >> 8) & 0xF) << 1;
+        imm |= ((raw_instr >> 25) & 0x3F) << 5;
+        imm |= ((raw_instr >> 7) & 0x1) << 11;
+        imm |= ((raw_instr >> 31) & 0x1) << 12;
+        return (int32_t)(imm << 19) >> 19;
+    }
+    int32_t immS() {
+        uint32_t imm = 0;
+        imm |= ((raw_instr >> 7) & 0x1F);
+        imm |= ((raw_instr >> 25) & 0x7F) << 5;
+        return (int32_t)(imm << 20) >> 20;
     }
 };
 
@@ -53,13 +67,12 @@ public:
             }
         }
     }
-    void Execute(Instruction instruction);
+    bool Execute(Instruction instruction);
     void ExecuteRType(Instruction instruction);
     void ExecuteIType(Instruction instruction);
     void ExecuteLoad(Instruction instruction);
     void ExecuteStore(Instruction instruction);
     void ExecuteBranch(Instruction instruction);
-    void ExecuteMul(Instruction instruction);
 
     int32_t SignExtension(int32_t num, int size) {
         return ((num << (32 - size)) >> (32 - size));
