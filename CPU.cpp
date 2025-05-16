@@ -3,6 +3,7 @@
 // Дай Бог чтоб работало
 
 bool CPU::Execute(Instruction instruction) {
+    // std::cout << pc << "pc : " <<  std::bitset<7>(instruction.opcode()) << "\n" << std::dec;
     switch (instruction.opcode()) {
     case 0b0110011:
         ExecuteRType(instruction);
@@ -19,20 +20,34 @@ bool CPU::Execute(Instruction instruction) {
     case 0b1100011:
         ExecuteBranch(instruction);
         break;
-    case 0b1110111:
+    case 0b1110011:
         if (instruction.immI() == 0x0) {
             return false;
         } else if (instruction.immI() == 0x1) {
             return false;
         }
         break;
+    case 0b0110111:
+        registers[instruction.rd()] = (instruction.immU() << 12);
+        break;
+    case 0b0010111:
+        registers[instruction.rd()] =  pc + (instruction.immU() << 12);
+        break;
+    case 0b1101111:
+        registers[instruction.rd()] = pc + 4;
+        pc += instruction.immJ();
+        return true;
+    case 0b1100111:
+        if (instruction.funct3() == 0x0) {
+            uint32_t next_pc = (registers[instruction.rs1()] + instruction.immI()) & ~1;
+            registers[instruction.rd()] = pc + 4;
+            pc = next_pc;
+            return true;
+        }
+        break;
     }
-    if (instruction.rd() == 0) {
-        registers[0] = 0;
-    }
-    if (instruction.opcode() != 0b1100011) {
-        pc += 4;
-    }
+    pc += 4;
+    registers[0] = 0;
     return true;
 }
 
@@ -40,86 +55,94 @@ void CPU::ExecuteRType(Instruction instruction) {
     uint32_t rd = instruction.rd();
     uint32_t rs1 = instruction.rs1();
     uint32_t rs2 = instruction.rs2();
+    uint32_t val1 = registers[rs1];
+    uint32_t val2 = registers[rs2];
+    
+    // std::cout << pc << "[R-Type] " << std::hex << instruction.raw_instr << " " << instruction.funct7() << " " << instruction.funct3() << "-" << std::dec;
+    
     switch (instruction.funct7()) {
     case 0x00:
-        switch (instruction.funct3())
-        {
+        switch (instruction.funct3()) {
         case 0x0: // ADD
-            registers[rd] = registers[rs1] + registers[rs2];
+            registers[rd] = val1 + val2;
             break;
-        case 0x1: // SHIFT LEFT LOGICAL
-            registers[rd] = (registers[rs1] << registers[rs2]);
+        case 0x1: // SLL
+            registers[rd] = val1 << val2;
             break;
-        case 0x2: // SET LESS THAN
-            registers[rd] = ((int32_t)registers[rs1] < (int32_t)registers[rs2] ? 1 : 0);
+        case 0x2: // SLT
+            registers[rd] = ((int32_t)val1 < (int32_t)val2) ? 1 : 0;
             break;
-        case 0x3: // SET LESS THAN (U)
-            registers[rd] = (registers[rs1] < registers[rs2] ? 1 : 0);
+        case 0x3: // SLTU
+            registers[rd] = val1 < val2 ? 1 : 0;
             break;
         case 0x4: // XOR
-            registers[rd] = registers[rs1] ^ registers[rs2];
+            registers[rd] = val1 ^ val2;
             break;
-        case 0x5: // SHIFT RIGHT LOGICAL
-            registers[rd] = (registers[rs1] >> registers[rs2]);
+        case 0x5: // SRL
+            registers[rd] = val1 >> val2;
             break;
         case 0x6: // OR
-            registers[rd] = registers[rs1] | registers[rs2];
+            registers[rd] = val1 | val2;
             break;
         case 0x7: // AND
-            registers[rd] = registers[rs1] & registers[rs2];
+            registers[rd] = val1 & val2;
             break;
         }
         break;
+        
+    case 0x20:
+        switch (instruction.funct3()) {
+        case 0x0: // SUB
+            registers[rd] = val1 - val2;
+            break;
+        case 0x5: // SRA
+            registers[rd] = int32_t(val1) >> val2;
+            break;
+        }
+        break;
+
     case 0x01:
-        switch (instruction.funct3())
-        {
+        int64_t result;
+        uint64_t result1;
+        switch (instruction.funct3()) {
         case 0x0: // MUL
-            registers[rd] = int32_t(registers[rs1]) * int32_t(registers[rs2]);
+            registers[rd] = int32_t(val1) * int32_t(val2);
             break;
-        case 0x1: // MUL High
-            int64_t result = int64_t(int32_t(registers[rs1])) * int64_t(int32_t(registers[rs2]));
+        case 0x1: // MULH
+            result = int64_t(int32_t(val1)) * int64_t(int32_t(val2));
             registers[rd] = uint32_t(result >> 32);
             break;
-        case 0x2: // MUL High (S) (U)
-            int64_t result = int64_t(int32_t(registers[rs1])) * uint64_t(registers[rs2]);
+        case 0x2: // MULHSU
+            result = int64_t(int32_t(val1)) * uint64_t(val2);
             registers[rd] = uint32_t(result >> 32);
             break;
-        case 0x3: // MUL High (U)
-            uint64_t result = uint64_t(registers[rs1]) * uint64_t(registers[rs2]);
-            registers[rd] = uint32_t(result >> 32);
+        case 0x3: // MULHU
+            result1 = uint64_t(val1) * uint64_t(val2);
+            registers[rd] = uint32_t(result1 >> 32);
             break;
         case 0x4: // DIV
-            registers[rd] = int32_t(registers[rs1]) / int32_t(registers[rs2]);
+            registers[rd] = int32_t(val1) / int32_t(val2);
             break;
-        case 0x5: // DIV (U)
-            registers[rd] = registers[rs1] / registers[rs2];
+        case 0x5: // DIVU
+            registers[rd] = val1 / val2;
             break;
-        case 0x6: // Remainder
-            registers[rd] = int32_t(registers[rs1]) % int32_t(registers[rs2]);
+        case 0x6: // REM
+            registers[rd] = int32_t(val1) % int32_t(val2);
             break;
-        case 0x7: // Remainder (U)
-            registers[rd] = registers[rs1] % registers[rs2];
-            break;
-        }
-        break;
-    case 0x20:
-        switch (instruction.funct3())
-        {
-        case 0x0: // SUB
-            registers[rd] = registers[rs1] - registers[rs2];
-            break;
-        case 0x5: // SHIFT RIGHT ARITHMETIC
-            registers[rd] = (int32_t(registers[rs1]) >> registers[rs2]);
+        case 0x7: // REMU
+            registers[rd] = val1 % val2;
             break;
         }
         break;
     }
 }
 
+
 void CPU::ExecuteIType(Instruction instruction) {
     int32_t imm = instruction.immI();
     uint32_t rd = instruction.rd();
     uint32_t rs1 = instruction.rs1();
+    // std::cout << pc << "[I-Type] " << instruction.immI() << std::dec << "\n";
     switch (instruction.funct3())
     {
     case 0x0: // ADD
@@ -132,7 +155,7 @@ void CPU::ExecuteIType(Instruction instruction) {
         registers[rd] = (registers[rs1] < imm ? 1 : 0);
         break;
     case 0x3: // SET LESS THAN IMM (U)
-        registers[rd] = ((uint32_t)registers[rs1] < imm ? 1 : 0);
+        registers[rd] = ((uint32_t)registers[rs1] < (uint32_t)imm ? 1 : 0);
         break;
     case 0x4: // XOR
         registers[rd] = registers[rs1] ^ imm;
@@ -160,19 +183,19 @@ void CPU::ExecuteLoad(Instruction instruction) {
     switch (instruction.funct3())
     {
     case 0x0:
-        registers[rd] = SignExtension(RAM.ReadByte(rs1 + imm), 8);
+        registers[rd] = SignExtension(RAM.ReadByte(registers[rs1] + imm), 8);
         break;
     case 0x1:
-        registers[rd] = SignExtension(RAM.Read2Bytes(rs1 + imm), 16);
+        registers[rd] = SignExtension(RAM.Read2Bytes(registers[rs1] + imm), 16);
         break;
     case 0x2:
-        registers[rd] = SignExtension(RAM.Read4Bytes(rs1 + imm), 32);
+        registers[rd] = SignExtension(RAM.Read4Bytes(registers[rs1] + imm), 32);
         break;
     case 0x4: // UNSIGNED
-        registers[rd] = RAM.Read2Bytes(rs1 + imm);
+        registers[rd] = RAM.Read2Bytes(registers[rs1] + imm);
         break;
     case 0x5: // UNSIGNED
-        registers[rd] = RAM.Read4Bytes(rs1 + imm);
+        registers[rd] = RAM.Read4Bytes(registers[rs1] + imm);
         break;
     }
 }
@@ -181,16 +204,17 @@ void CPU::ExecuteStore(Instruction instruction) {
     int32_t imm = instruction.immS();
     uint32_t rs1 = instruction.rs1();
     uint32_t rs2 = instruction.rs2();
+    // std::cout << "store: " << instruction.funct3() << "\n";
 
     switch (instruction.funct3()) {
     case 0x0: // STORE BYTE
-        RAM.WriteByte(rs1 + imm, (uint8_t)registers[rs2]);
+        RAM.WriteByte(registers[rs1] + imm, (uint8_t)registers[rs2]);
         break;
     case 0x1: // STORE HALF
-        RAM.Write2Bytes(rs1 + imm, (uint16_t)registers[rs2]);
+        RAM.Write2Bytes(registers[rs1] + imm, (uint16_t)registers[rs2]);
         break;
     case 0x2: // STORE WORD
-        RAM.Write4Bytes(rs1 + imm, (uint32_t)registers[rs2]);
+        RAM.Write4Bytes(registers[rs1] + imm, (uint32_t)registers[rs2]);
         break;
     }
 }
@@ -199,37 +223,57 @@ void CPU::ExecuteBranch(Instruction instruction) {
     int32_t imm = instruction.immB();
     uint32_t rs1 = instruction.rs1();
     uint32_t rs2 = instruction.rs2();
+    // std::cout << "branch command: " << pc <<" " << instruction.funct3() << " " << imm << "\n";
+    // std::cout << registers[rs1] << " " << registers[rs2] << " " << rs1 << " " << rs2 << "\n";
 
     switch (instruction.funct3()) {
     case 0x0:
         if (registers[rs1] == registers[rs2]) {
-            pc += imm;
+            pc += imm - 4;
         }
         break;
     case 0x1:
         if (registers[rs1] != registers[rs2]) {
-            pc += imm;
+            pc += imm - 4;
         }
         break;
     case 0x4:
         if (registers[rs1] < registers[rs2]) {
-            pc += imm;
+            pc += imm - 4;
         }
         break;
     case 0x5:
         if (registers[rs1] >= registers[rs2]) {
-            pc += imm;
+            pc += imm - 4;
         }
         break;
     case 0x6: // UNSIGNED
         if ((uint32_t)registers[rs1] < (uint32_t)registers[rs2]) {
-            pc += imm;
+            pc += imm - 4;
         }
         break;
     case 0x7: // UNSIGNED
         if ((uint32_t)registers[rs1] >= (uint32_t)registers[rs2]) {
-            pc += imm;
+            pc += imm - 4;
         }
         break;
+    }
+}
+
+void CPU::Work() {
+    for(int i = 0; ; ++i) {
+        // std::cout << pc << "\n";
+        Instruction instruction(RAM.Read4Bytes(pc));
+        // std::cout << std::hex << instruction.raw_instr << std::dec << "\n";
+        if (!Execute(instruction)) {
+            break;
+        }
+    }
+}
+
+void CPU::dump() {
+    std::cout << "pc: " << pc << "\n";
+    for (int i = 0; i < 32; ++i) {
+        std::cout << "x" << i << ": " << registers[i] << "\n";
     }
 }

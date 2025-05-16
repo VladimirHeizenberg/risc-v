@@ -36,7 +36,7 @@ struct Instruction {
         imm |= ((raw_instr >> 25) & 0x3F) << 5;
         imm |= ((raw_instr >> 7) & 0x1) << 11;
         imm |= ((raw_instr >> 31) & 0x1) << 12;
-        return (int32_t)(imm << 19) >> 19;
+        return ((int32_t)(imm << 19) >> 19);
     }
     int32_t immS() {
         uint32_t imm = 0;
@@ -44,20 +44,35 @@ struct Instruction {
         imm |= ((raw_instr >> 25) & 0x7F) << 5;
         return (int32_t)(imm << 20) >> 20;
     }
+    int32_t immU() {
+        return (raw_instr & 0xFFFFF000) >> 12;
+    }
+    int32_t immJ() {
+        uint32_t imm = 0;
+        imm |= ((raw_instr >> 21) & 0x3FF) << 1;
+        imm |= ((raw_instr >> 20) & 0x1) << 11;
+        imm |= ((raw_instr >> 12) & 0xFF) << 12;
+        imm |= ((raw_instr >> 31) & 0x1) << 20;
+        return ((int32_t)(imm << 11)) >> 11;
+    }
+
 };
 
 class CPU {
 public:
+    CPU(Memory& ram)
+    : RAM(ram) {}
     CPU(std::istream& in, Memory& ram)
     : RAM(ram)
     , pc(0) {
         for (int i = 0; i < 32; ++i) {
             registers[i] = 0;
         }
+
         for (int j = 0; j < 4; ++j) {
-            char byte;
-            in.read(&byte, sizeof(unsigned char));
-            pc |= (byte << (8 * j));
+            uint8_t byte;
+            in.read((char*)&byte, sizeof(byte));
+            pc |= (static_cast<int32_t>(byte) << (8 * j));
         }
         for (int i = 1; i < 32; ++i) {
             for (int j = 0; j < 4; ++j) {
@@ -73,12 +88,14 @@ public:
     void ExecuteLoad(Instruction instruction);
     void ExecuteStore(Instruction instruction);
     void ExecuteBranch(Instruction instruction);
+    void Work();
+    void dump();
 
     int32_t SignExtension(int32_t num, int size) {
         return ((num << (32 - size)) >> (32 - size));
     }
 private:
     int32_t registers[32];
-    size_t pc;
+    int32_t pc;
     Memory& RAM;
 };
