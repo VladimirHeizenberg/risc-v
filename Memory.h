@@ -27,15 +27,6 @@ public:
         memory[address + 3] = (uint8_t)((value >> 24) & (0xFF));
     }
 
-    size_t Read4Bytes(size_t address) {
-        size_t ans = 0;
-        ans |= (size_t)memory[address];
-        ans |= ((size_t)memory[address + 1] << 8);
-        ans |= ((size_t)memory[address + 2] << 16);
-        ans |= ((size_t)memory[address + 3] << 24);
-        return ans;
-    }
-
     size_t ReadByte(size_t address) {
         return (size_t)memory[address];
     }
@@ -47,8 +38,38 @@ public:
         return ans;
     }
 
+    size_t Read4Bytes(size_t address) {
+        size_t ans = 0;
+        ans |= (size_t)memory[address];
+        ans |= ((size_t)memory[address + 1] << 8);
+        ans |= ((size_t)memory[address + 2] << 16);
+        ans |= ((size_t)memory[address + 3] << 24);
+        return ans;
+    }
+
+    std::vector<uint8_t> ReadBlock(size_t address, size_t size) {
+        std::vector<uint8_t> result;
+        for (int i = 0; i < size; ++i) {
+            result.push_back(ReadByte(address + i));
+        }
+        return result;
+    }
+
+    void WriteBlock(size_t address, const std::vector<uint8_t>& data) {
+        for (int i = 0; i < data.size(); ++i) {
+            memory[address + i] = data[i];
+        }
+    }
+
+    void dump() {
+        for (int i = 0; i < 32; i = i + 4) {
+            std::cout << std::bitset<32>((int32_t)Read4Bytes(i)) << " ";
+        }
+    }
+
     void LoadBinary(std::istream& in) {
         while (in.peek() != EOF) {
+            // TODO: add serialization
             uint32_t address = 0;
             uint32_t size = 0;
             in.read(reinterpret_cast<char*>(&address), sizeof(address));

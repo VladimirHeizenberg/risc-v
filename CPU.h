@@ -3,6 +3,7 @@
 #include <iostream>
 
 #include "Memory.h"
+#include "Cache.h"
 
 struct Instruction {
     uint32_t raw_instr;
@@ -60,9 +61,9 @@ struct Instruction {
 
 class CPU {
 public:
-    CPU(Memory& ram)
+    CPU(Cache& ram)
     : RAM(ram) {}
-    CPU(std::istream& in, Memory& ram)
+    CPU(std::istream& in, Cache& ram)
     : RAM(ram)
     , pc(0) {
         for (int i = 0; i < 32; ++i) {
@@ -99,5 +100,5 @@ private:
     int32_t registers[32];
     int32_t pc;
     int32_t ra;
-    Memory& RAM;
+    Cache& RAM;
 };

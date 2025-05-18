@@ -41,7 +41,7 @@ void CPU::Execute(Instruction instruction) {
     default:
         throw std::runtime_error(
             "unknown command:" + std::bitset<32>(instruction.raw_instr).to_string() +
-            "didn't manage to recognize opcode: " + 
+            "| didn't manage to recognize opcode: " + 
             std::bitset<7>(instruction.opcode()).to_string()
         );
         break;
@@ -70,7 +70,7 @@ void CPU::ExecuteRType(Instruction instruction) {
             registers[rd] = (registers[rs1] < registers[rs2]) ? 1 : 0;
             break;
         case 0x3: // SLTU
-            registers[rd] = registers[rs1] < registers[rs2] ? 1 : 0;
+            registers[rd] = uint32_t(registers[rs1]) < uint32_t(registers[rs2]) ? 1 : 0;
             break;
         case 0x4: // XOR
             registers[rd] = registers[rs1] ^ registers[rs2];
@@ -87,7 +87,7 @@ void CPU::ExecuteRType(Instruction instruction) {
         default:
             throw std::runtime_error(
                 "unknown command:" + std::bitset<32>(instruction.raw_instr).to_string() +
-                "didn't manage to recognize funct3: " + 
+                "| didn't manage to recognize funct3: " + 
                 std::bitset<7>(instruction.funct3()).to_string()
             );
             break;
@@ -105,7 +105,7 @@ void CPU::ExecuteRType(Instruction instruction) {
         default:
             throw std::runtime_error(
                 "unknown command:" + std::bitset<32>(instruction.raw_instr).to_string() +
-                "didn't manage to recognize funct3: " + 
+                "| didn't manage to recognize funct3: " + 
                 std::bitset<7>(instruction.funct3()).to_string()
             );
             break;
@@ -150,7 +150,7 @@ void CPU::ExecuteRType(Instruction instruction) {
         default:
             throw std::runtime_error(
                 "unknown command:" + std::bitset<32>(instruction.raw_instr).to_string() +
-                "didn't manage to recognize funct3: " + 
+                "| didn't manage to recognize funct3: " + 
                 std::bitset<7>(instruction.funct3()).to_string()
             );
             break;
@@ -159,7 +159,7 @@ void CPU::ExecuteRType(Instruction instruction) {
     default:
         throw std::runtime_error(
             "unknown command:" + std::bitset<32>(instruction.raw_instr).to_string() +
-            "didn't manage to recognize funct7: " + 
+            "| didn't manage to recognize funct7: " + 
             std::bitset<7>(instruction.funct7()).to_string()
         );
         break;
@@ -205,7 +205,7 @@ void CPU::ExecuteIType(Instruction instruction) {
     default:
         throw std::runtime_error(
             "unknown command:" + std::bitset<32>(instruction.raw_instr).to_string() +
-            "didn't manage to recognize funct3: " + 
+            "| didn't manage to recognize funct3: " + 
             std::bitset<7>(instruction.funct3()).to_string()
         );
         break;
@@ -236,7 +236,7 @@ void CPU::ExecuteLoad(Instruction instruction) {
     default:
         throw std::runtime_error(
             "unknown command:" + std::bitset<32>(instruction.raw_instr).to_string() +
-            "didn't manage to recognize funct3: " + 
+            "| didn't manage to recognize funct3: " + 
             std::bitset<7>(instruction.funct3()).to_string()
         );
         break;
@@ -262,7 +262,7 @@ void CPU::ExecuteStore(Instruction instruction) {
     default:
         throw std::runtime_error(
             "unknown command:" + std::bitset<32>(instruction.raw_instr).to_string() +
-            "didn't manage to recognize funct3: " + 
+            "| didn't manage to recognize funct3: " + 
             std::bitset<7>(instruction.funct3()).to_string()
         );
         break;
@@ -310,7 +310,7 @@ void CPU::ExecuteBranch(Instruction instruction) {
     default:
         throw std::runtime_error(
             "unknown command:" + std::bitset<32>(instruction.raw_instr).to_string() +
-            "didn't manage to recognize funct3: " + 
+            "| didn't manage to recognize funct3: " + 
             std::bitset<7>(instruction.funct3()).to_string()
         );
         break;    
@@ -318,9 +318,9 @@ void CPU::ExecuteBranch(Instruction instruction) {
 }
 
 void CPU::Work() {
-    while(pc != ra) {
-        std::cout << pc << "\n";
-        Instruction instruction(RAM.Read4Bytes(pc));
+    for (int i = 0; ; ++i) {
+        // std::cout << pc << ": ";
+        Instruction instruction(RAM.Read4Bytes(pc, true));
         // std::cout << std::hex << instruction.raw_instr << std::dec << "\n";
         if (instruction.opcode() == 0b1110011) {
             if (instruction.immI() == 0x0) {
