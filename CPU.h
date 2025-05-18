@@ -81,8 +81,9 @@ public:
                 registers[i] |= (byte << (8 * j));
             }
         }
+        ra = registers[1];
     }
-    bool Execute(Instruction instruction);
+    void Execute(Instruction instruction);
     void ExecuteRType(Instruction instruction);
     void ExecuteIType(Instruction instruction);
     void ExecuteLoad(Instruction instruction);
@@ -97,5 +98,6 @@ public:
 private:
     int32_t registers[32];
     int32_t pc;
+    int32_t ra;
     Memory& RAM;
 };

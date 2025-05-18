@@ -2,7 +2,7 @@
 
 // Дай Бог чтоб работало
 
-bool CPU::Execute(Instruction instruction) {
+void CPU::Execute(Instruction instruction) {
     // std::cout << pc << "pc : " <<  std::bitset<7>(instruction.opcode()) << "\n" << std::dec;
     switch (instruction.opcode()) {
     case 0b0110011:
@@ -20,13 +20,6 @@ bool CPU::Execute(Instruction instruction) {
     case 0b1100011:
         ExecuteBranch(instruction);
         break;
-    case 0b1110011:
-        if (instruction.immI() == 0x0) {
-            return false;
-        } else if (instruction.immI() == 0x1) {
-            return false;
-        }
-        break;
     case 0b0110111:
         registers[instruction.rd()] = (instruction.immU() << 12);
         break;
@@ -36,27 +29,31 @@ bool CPU::Execute(Instruction instruction) {
     case 0b1101111:
         registers[instruction.rd()] = pc + 4;
         pc += instruction.immJ();
-        return true;
+        return;
     case 0b1100111:
         if (instruction.funct3() == 0x0) {
             uint32_t next_pc = (registers[instruction.rs1()] + instruction.immI()) & ~1;
             registers[instruction.rd()] = pc + 4;
             pc = next_pc;
-            return true;
+            return;
         }
+        break;
+    default:
+        throw std::runtime_error(
+            "unknown command:" + std::bitset<32>(instruction.raw_instr).to_string() +
+            "didn't manage to recognize opcode: " + 
+            std::bitset<7>(instruction.opcode()).to_string()
+        );
         break;
     }
     pc += 4;
     registers[0] = 0;
-    return true;
 }
 
 void CPU::ExecuteRType(Instruction instruction) {
     uint32_t rd = instruction.rd();
     uint32_t rs1 = instruction.rs1();
     uint32_t rs2 = instruction.rs2();
-    uint32_t val1 = registers[rs1];
-    uint32_t val2 = registers[rs2];
     
     // std::cout << pc << "[R-Type] " << std::hex << instruction.raw_instr << " " << instruction.funct7() << " " << instruction.funct3() << "-" << std::dec;
     
@@ -64,28 +61,35 @@ void CPU::ExecuteRType(Instruction instruction) {
     case 0x00:
         switch (instruction.funct3()) {
         case 0x0: // ADD
-            registers[rd] = val1 + val2;
+            registers[rd] = registers[rs1] + registers[rs2];
             break;
         case 0x1: // SLL
-            registers[rd] = val1 << val2;
+            registers[rd] = registers[rs1] << registers[rs2];
             break;
         case 0x2: // SLT
-            registers[rd] = ((int32_t)val1 < (int32_t)val2) ? 1 : 0;
+            registers[rd] = (registers[rs1] < registers[rs2]) ? 1 : 0;
             break;
         case 0x3: // SLTU
-            registers[rd] = val1 < val2 ? 1 : 0;
+            registers[rd] = registers[rs1] < registers[rs2] ? 1 : 0;
             break;
         case 0x4: // XOR
-            registers[rd] = val1 ^ val2;
+            registers[rd] = registers[rs1] ^ registers[rs2];
             break;
         case 0x5: // SRL
-            registers[rd] = val1 >> val2;
+            registers[rd] = registers[rs1] >> registers[rs2];
             break;
         case 0x6: // OR
-            registers[rd] = val1 | val2;
+            registers[rd] = registers[rs1] | registers[rs2];
             break;
         case 0x7: // AND
-            registers[rd] = val1 & val2;
+            registers[rd] = registers[rs1] & registers[rs2];
+            break;
+        default:
+            throw std::runtime_error(
+                "unknown command:" + std::bitset<32>(instruction.raw_instr).to_string() +
+                "didn't manage to recognize funct3: " + 
+                std::bitset<7>(instruction.funct3()).to_string()
+            );
             break;
         }
         break;
@@ -93,10 +97,17 @@ void CPU::ExecuteRType(Instruction instruction) {
     case 0x20:
         switch (instruction.funct3()) {
         case 0x0: // SUB
-            registers[rd] = val1 - val2;
+            registers[rd] = registers[rs1] - registers[rs2];
             break;
         case 0x5: // SRA
-            registers[rd] = int32_t(val1) >> val2;
+            registers[rd] = (registers[rs1] >> registers[rs2]);
+            break;
+        default:
+            throw std::runtime_error(
+                "unknown command:" + std::bitset<32>(instruction.raw_instr).to_string() +
+                "didn't manage to recognize funct3: " + 
+                std::bitset<7>(instruction.funct3()).to_string()
+            );
             break;
         }
         break;
@@ -106,33 +117,51 @@ void CPU::ExecuteRType(Instruction instruction) {
         uint64_t result1;
         switch (instruction.funct3()) {
         case 0x0: // MUL
-            registers[rd] = int32_t(val1) * int32_t(val2);
+            registers[rd] = registers[rs1] * registers[rs2];
             break;
         case 0x1: // MULH
-            result = int64_t(int32_t(val1)) * int64_t(int32_t(val2));
-            registers[rd] = uint32_t(result >> 32);
+            result = int64_t(registers[rs1]) * int64_t(registers[rs2]);
+            registers[rd] = int32_t(result >> 32);
             break;
         case 0x2: // MULHSU
-            result = int64_t(int32_t(val1)) * uint64_t(val2);
+            result = int64_t(registers[rs1]) * uint64_t(registers[rs2]);
             registers[rd] = uint32_t(result >> 32);
             break;
         case 0x3: // MULHU
-            result1 = uint64_t(val1) * uint64_t(val2);
-            registers[rd] = uint32_t(result1 >> 32);
+            result1 = uint64_t(registers[rs1]) * uint64_t(registers[rs2]);
+            registers[rd] = int32_t(result1 >> 32);
             break;
         case 0x4: // DIV
-            registers[rd] = int32_t(val1) / int32_t(val2);
+            if (registers[rs2] == 0) registers[rd] = -1;
+            else registers[rd] = registers[rs1] / registers[rs2];
             break;
         case 0x5: // DIVU
-            registers[rd] = val1 / val2;
+            if (registers[rs2] == 0) registers[rd] = -1;
+            else registers[rd] = uint32_t(registers[rs1]) / uint32_t(registers[rs2]);
             break;
         case 0x6: // REM
-            registers[rd] = int32_t(val1) % int32_t(val2);
+            if (registers[rs2] == 0) registers[rd] = registers[rs1];
+            else registers[rd] = registers[rs1] % registers[rs2];
             break;
         case 0x7: // REMU
-            registers[rd] = val1 % val2;
+            if (registers[rs2] == 0) registers[rd] = registers[rs1];
+            else registers[rd] = uint32_t(registers[rs1]) % uint32_t(registers[rs2]);
+            break;
+        default:
+            throw std::runtime_error(
+                "unknown command:" + std::bitset<32>(instruction.raw_instr).to_string() +
+                "didn't manage to recognize funct3: " + 
+                std::bitset<7>(instruction.funct3()).to_string()
+            );
             break;
         }
+        break;
+    default:
+        throw std::runtime_error(
+            "unknown command:" + std::bitset<32>(instruction.raw_instr).to_string() +
+            "didn't manage to recognize funct7: " + 
+            std::bitset<7>(instruction.funct7()).to_string()
+        );
         break;
     }
 }
@@ -162,9 +191,9 @@ void CPU::ExecuteIType(Instruction instruction) {
         break;
     case 0x5:
         if ((instruction.raw_instr >> 30) & 0x1) {// SRAI
-            registers[rd] = int32_t(registers[rs1]) >> (imm & 0x1F);
+            registers[rd] = (registers[rs1] >> (imm & 0x1F));
         } else { // SRLI
-            registers[rd] = registers[rs1] >> (imm & 0x1F);
+            registers[rd] = (registers[rs1] >> (imm & 0x1F));
         }
         break;
     case 0x6: // OR
@@ -172,6 +201,13 @@ void CPU::ExecuteIType(Instruction instruction) {
         break;
     case 0x7: // AND
         registers[rd] = registers[rs1] & imm;
+        break;
+    default:
+        throw std::runtime_error(
+            "unknown command:" + std::bitset<32>(instruction.raw_instr).to_string() +
+            "didn't manage to recognize funct3: " + 
+            std::bitset<7>(instruction.funct3()).to_string()
+        );
         break;
     }
 }
@@ -197,6 +233,13 @@ void CPU::ExecuteLoad(Instruction instruction) {
     case 0x5: // UNSIGNED
         registers[rd] = RAM.Read4Bytes(registers[rs1] + imm);
         break;
+    default:
+        throw std::runtime_error(
+            "unknown command:" + std::bitset<32>(instruction.raw_instr).to_string() +
+            "didn't manage to recognize funct3: " + 
+            std::bitset<7>(instruction.funct3()).to_string()
+        );
+        break;
     }
 }
 
@@ -215,6 +258,13 @@ void CPU::ExecuteStore(Instruction instruction) {
         break;
     case 0x2: // STORE WORD
         RAM.Write4Bytes(registers[rs1] + imm, (uint32_t)registers[rs2]);
+        break;
+    default:
+        throw std::runtime_error(
+            "unknown command:" + std::bitset<32>(instruction.raw_instr).to_string() +
+            "didn't manage to recognize funct3: " + 
+            std::bitset<7>(instruction.funct3()).to_string()
+        );
         break;
     }
 }
@@ -257,17 +307,31 @@ void CPU::ExecuteBranch(Instruction instruction) {
             pc += imm - 4;
         }
         break;
+    default:
+        throw std::runtime_error(
+            "unknown command:" + std::bitset<32>(instruction.raw_instr).to_string() +
+            "didn't manage to recognize funct3: " + 
+            std::bitset<7>(instruction.funct3()).to_string()
+        );
+        break;    
     }
 }
 
 void CPU::Work() {
-    for(int i = 0; ; ++i) {
-        // std::cout << pc << "\n";
+    while(pc != ra) {
+        std::cout << pc << "\n";
         Instruction instruction(RAM.Read4Bytes(pc));
         // std::cout << std::hex << instruction.raw_instr << std::dec << "\n";
-        if (!Execute(instruction)) {
-            break;
+        if (instruction.opcode() == 0b1110011) {
+            if (instruction.immI() == 0x0) {
+                pc = ra;
+                break;
+            } else if (instruction.immI() == 0x1) {
+                pc = ra;
+                break;
+            }
         }
+        Execute(instruction);
     }
 }
 
