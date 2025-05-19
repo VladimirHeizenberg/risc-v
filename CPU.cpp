@@ -335,9 +335,16 @@ void CPU::Work() {
     }
 }
 
-void CPU::dump() {
-    std::cout << "pc: " << pc << "\n";
+void CPU::dump(std::ostream& out) {
     for (int i = 0; i < 32; ++i) {
-        std::cout << "x" << i << ": " << registers[i] << "\n";
+        int32_t value = registers[i];
+        char byte1 = (char)(value & (0xFF));
+        char byte2 = (char)((value >> 8) & (0xFF));
+        char byte3 = (char)((value >> 16) & (0xFF));
+        char byte4 = (char)((value >> 24) & (0xFF));
+        out.write(&byte1, sizeof(byte1));
+        out.write(&byte2, sizeof(byte2));
+        out.write(&byte3, sizeof(byte3));
+        out.write(&byte4, sizeof(byte4));
     }
 }

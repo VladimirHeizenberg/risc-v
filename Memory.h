@@ -61,9 +61,10 @@ public:
         }
     }
 
-    void dump() {
-        for (int i = 0; i < 32; i = i + 4) {
-            std::cout << std::bitset<32>((int32_t)Read4Bytes(i)) << " ";
+    void dump(std::ostream& out, size_t address, size_t size_mem) {
+        for (size_t i = 0; i < size_mem; ++i) {
+            char byte = memory[address + i];
+            out.write(&byte, sizeof(byte));
         }
     }
 

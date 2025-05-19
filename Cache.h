@@ -49,6 +49,7 @@ struct CacheLine {
     std::vector<uint8_t> data;
     size_t tag;
     bool valid;
+    bool dirty;
 };
 
 class BaseCacheSet {
@@ -81,6 +82,7 @@ public:
             if (lines[i].valid && lines[i].tag == tag) {
                 UpdateLine(i);
                 lines[i].WriteBytes<T>(offset, value);
+                lines[i].dirty = true;
                 return true;
             }
         }
@@ -89,14 +91,15 @@ public:
             if (lines[i].valid && lines[i].tag == tag) {
                 UpdateLine(i);
                 lines[i].WriteBytes<T>(offset, value);
+                lines[i].dirty = true;
                 return false;
             }
         }
         throw std::runtime_error("smth went wrong");
     }
     virtual ~BaseCacheSet() = default;
-
     virtual void invalidate(size_t index) = 0;
+
 protected:
     virtual void UpdateLine(size_t i) = 0; 
     virtual void UpdateSet(size_t address) = 0;
@@ -116,7 +119,9 @@ public:
         for (int i = 0; i < Constants::CACHE_WAY; ++i) {
             if (lines[i].valid) {
                 uint32_t begin_index = Interpreter::make_address(lines[i].tag, index);
-                mem.WriteBlock(begin_index, lines[i].data);
+                if (lines[i].dirty) {
+                    mem.WriteBlock(begin_index, lines[i].data);
+                }
                 lines[i].valid = false;
             }
         }
@@ -144,7 +149,12 @@ private:
                 index = i;
             }
         }
-        mem.WriteBlock(begin_index, lines[index].data);
+        if (lines[index].dirty) {
+            mem.WriteBlock(
+                Interpreter::make_address(lines[index].tag, Interpreter::index(address)), 
+                lines[index].data
+            );
+        }
         // std::cout << "CACHE OUT!\n";
         lines[index].data = mem.ReadBlock(begin_index, Constants::CACHE_LINE_SIZE);
         lines[index].tag = Interpreter::tag(address);
@@ -167,7 +177,9 @@ public:
         for (int i = 0; i < Constants::CACHE_WAY; ++i) {
             if (lines[i].valid) {
                 uint32_t begin_index = Interpreter::make_address(lines[i].tag, index);
-                mem.WriteBlock(begin_index, lines[i].data);
+                if (lines[i].dirty) {
+                    mem.WriteBlock(begin_index, lines[i].data);
+                }
                 lines[i].valid = false;
             }
         }
@@ -200,9 +212,13 @@ private:
                 return;
             }
             if (!pseudo_lru[i]) {
-                mem.WriteBlock(begin_index, lines[i].data);
-                lines[index].data = mem.ReadBlock(begin_index, Constants::CACHE_LINE_SIZE);
-                lines[index].tag = Interpreter::tag(address);
+                if (lines[i].dirty) {
+                    mem.WriteBlock(
+                        Interpreter::make_address(lines[i].tag, Interpreter::index(address)),
+                        lines[i].data);
+                }
+                lines[i].data = mem.ReadBlock(begin_index, Constants::CACHE_LINE_SIZE);
+                lines[i].tag = Interpreter::tag(address);
                 return;
             }
         }
@@ -224,6 +240,11 @@ public:
             sets_.reserve(Constants::CACHE_SET_COUNT);
             for (size_t i = 0; i < Constants::CACHE_SET_COUNT; ++i) {
                 sets_.emplace_back(std::make_unique<LRUCacheSet>(mem_));
+            }
+        } else if (policy_ == Policy::bit_pLRU) {
+            sets_.reserve(Constants::CACHE_SET_COUNT);
+            for (size_t i = 0; i < Constants::CACHE_SET_COUNT; ++i) {
+                sets_.emplace_back(std::make_unique<BitPLRUCacheSet>(mem_));
             }
         }
     }

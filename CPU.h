@@ -91,11 +91,13 @@ public:
     void ExecuteStore(Instruction instruction);
     void ExecuteBranch(Instruction instruction);
     void Work();
-    void dump();
+    void dump(std::ostream& out);
 
     int32_t SignExtension(int32_t num, int size) {
         return ((num << (32 - size)) >> (32 - size));
     }
+
+
 private:
     int32_t registers[32];
     uint32_t pc;
