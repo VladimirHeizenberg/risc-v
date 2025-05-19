@@ -73,13 +73,13 @@ public:
         for (int j = 0; j < 4; ++j) {
             uint8_t byte;
             in.read((char*)&byte, sizeof(byte));
-            pc |= (static_cast<int32_t>(byte) << (8 * j));
+            pc |= ((static_cast<int32_t>(byte) & 0xFF) << (8 * j));
         }
         for (int i = 1; i < 32; ++i) {
             for (int j = 0; j < 4; ++j) {
                 char byte;
-                in.read(&byte, sizeof(unsigned char));
-                registers[i] |= (byte << (8 * j));
+                in.read(&byte, sizeof(byte));
+                registers[i] |= ((static_cast<int32_t>(byte) & 0xFF)  << (8 * j));
             }
         }
         ra = registers[1];
@@ -98,7 +98,7 @@ public:
     }
 private:
     int32_t registers[32];
-    int32_t pc;
+    uint32_t pc;
     int32_t ra;
     Cache& RAM;
 };

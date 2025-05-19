@@ -5,7 +5,7 @@
 
 enum Policy {
     LRU,
-    pLRU
+    bit_pLRU
 };
 
 class Interpreter {
@@ -221,6 +221,7 @@ public:
                 lines[i].tag = Interpreter::tag(address);
                 lines[i].valid = true;
                 time_cnt[i] = time;
+
                 return;
             }
             if (time - time_cnt[i] > diff) {
@@ -229,6 +230,7 @@ public:
             }
         }
         mem.WriteBlock(begin_index, lines[index].data);
+        // std::cout << "CACHE OUT!\n";
         lines[index].data = mem.ReadBlock(begin_index, Constants::CACHE_LINE_SIZE);
         lines[index].tag = Interpreter::tag(address);
         time_cnt[index] = time;
@@ -236,7 +238,6 @@ public:
 
     void invalidate(int index) {
         for (int i = 0; i < Constants::CACHE_WAY; ++i) {
-            // std::cout << "line: " << i << "\n";
             if (lines[i].valid) {
                 uint32_t begin_index = Interpreter::make_address(lines[i].tag, index);
                 mem.WriteBlock(begin_index, lines[i].data);
@@ -280,6 +281,7 @@ public:
     }
 
     uint32_t Read4Bytes(size_t address, bool is_command = false) {
+        // std::cout << "reading on address: " << address << "; CacheSet: " << Interpreter::index(address) << "\n";
         auto [res, hit] = sets_[Interpreter::index(address)].Read4Bytes(address, total_time);
         Add(is_command, hit);
         ++total_time;
@@ -287,6 +289,7 @@ public:
     }
 
     void WriteByte(size_t address, uint8_t value) {
+        // std::cout << "writing in address: " << Interpreter::index(address) << "; CacheSet: " << Interpreter::index(address) << "\n";
         bool hit = sets_[Interpreter::index(address)].WriteByte(address, value, total_time);
         Add(false, hit);
         ++total_time;

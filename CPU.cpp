@@ -318,8 +318,8 @@ void CPU::ExecuteBranch(Instruction instruction) {
 }
 
 void CPU::Work() {
-    for (int i = 0; ; ++i) {
-        // std::cout << pc << ": ";
+    while (pc != ra) {
+        // std::cout << pc << ": " << ra << " - ";
         Instruction instruction(RAM.Read4Bytes(pc, true));
         // std::cout << std::hex << instruction.raw_instr << std::dec << "\n";
         if (instruction.opcode() == 0b1110011) {
