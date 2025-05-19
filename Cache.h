@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iostream>
 #include "Memory.h"
 #include "Constants.h"
 
@@ -39,177 +40,92 @@ struct CacheLine {
         data = std::vector<uint8_t>(Constants::CACHE_LINE_SIZE);
     }
 
-    void WriteByte(size_t address, uint8_t value) {
-        data[address] = value;
-    }
+    template<class T>
+    void WriteBytes(size_t address, T value) {}
 
-    void Write2Bytes(size_t address, uint16_t value) {
-        data[address] = (uint8_t)(value & (0xFF));
-        data[address + 1] = (uint8_t)((value >> 8) & (0xFF));
-    }
-
-    void Write4Bytes(size_t address, uint32_t value) {
-        data[address] = (uint8_t)(value & (0xFF));
-        data[address + 1] = (uint8_t)((value >> 8) & (0xFF));
-        data[address + 2] = (uint8_t)((value >> 16)& (0xFF));
-        data[address + 3] = (uint8_t)((value >> 24) & (0xFF));
-    }
-
-    size_t ReadByte(size_t address) {
-        return (size_t)data[address];
-    }
-
-    size_t Read2Bytes(size_t address) {
-        size_t ans = 0;
-        ans |= (size_t)data[address];
-        ans |= ((size_t)data[address + 1] << 8);
-        return ans;
-    }
-
-    size_t Read4Bytes(size_t address) {
-        size_t ans = 0;
-        ans |= (size_t)data[address];
-        ans |= ((size_t)data[address + 1] << 8);
-        ans |= ((size_t)data[address + 2] << 16);
-        ans |= ((size_t)data[address + 3] << 24);
-        return ans;
-    }
+    template<class T>
+    T ReadBytes(size_t address) {return T();}
 
     std::vector<uint8_t> data;
     size_t tag;
     bool valid;
 };
 
-class CacheSet {
+class BaseCacheSet {
 public:
-    CacheSet(Policy p, Memory& mem_)
-    : policy(p)
-    , mem(mem_) {
+    template<class T>
+    std::pair<T, bool> ReadBytes(size_t address) {
+        size_t tag = Interpreter::tag(address);
+        size_t offset = Interpreter::offset(address);
+        for (int i = 0; i < Constants::CACHE_WAY; ++i) {
+            if (lines[i].valid && lines[i].tag == tag) {
+                UpdateLine(i);
+                return {lines[i].ReadBytes<T>(offset), true};
+            }
+        }
+        UpdateSet(address);
+        for (int i = 0; i < Constants::CACHE_WAY; ++i) {
+            if (lines[i].valid && lines[i].tag == tag) {
+                UpdateLine(i);
+                return {lines[i].ReadBytes<T>(offset), false};
+            }
+        }
+        throw std::runtime_error("smth went wrong");
+    }
+
+    template<class T>
+    bool WriteBytes(size_t address, T value) {
+        size_t tag = Interpreter::tag(address);
+        size_t offset = Interpreter::offset(address);
+        for (int i = 0; i < Constants::CACHE_WAY; ++i) {
+            if (lines[i].valid && lines[i].tag == tag) {
+                UpdateLine(i);
+                lines[i].WriteBytes<T>(offset, value);
+                return true;
+            }
+        }
+        UpdateSet(address);
+        for (int i = 0; i < Constants::CACHE_WAY; ++i) {
+            if (lines[i].valid && lines[i].tag == tag) {
+                UpdateLine(i);
+                lines[i].WriteBytes<T>(offset, value);
+                return false;
+            }
+        }
+        throw std::runtime_error("smth went wrong");
+    }
+    virtual ~BaseCacheSet() = default;
+
+    virtual void invalidate(size_t index) = 0;
+protected:
+    virtual void UpdateLine(size_t i) = 0; 
+    virtual void UpdateSet(size_t address) = 0;
+    std::vector<CacheLine> lines;
+};
+
+class LRUCacheSet : public BaseCacheSet {
+public:
+    LRUCacheSet(Memory& mem_)
+    : mem(mem_)
+    , time(0) {
         lines = std::vector<CacheLine>(Constants::CACHE_WAY);
         time_cnt = std::vector<size_t>(Constants::CACHE_WAY);
     }
 
-    std::pair<uint8_t, bool> ReadByte(size_t address, size_t time) {
-        size_t tag = Interpreter::tag(address);
-        size_t offset = Interpreter::offset(address);
+    void invalidate(size_t index) override {
         for (int i = 0; i < Constants::CACHE_WAY; ++i) {
-            if (lines[i].valid && lines[i].tag == tag) {
-                time_cnt[i] = time;
-                return {lines[i].ReadByte(offset), true};
+            if (lines[i].valid) {
+                uint32_t begin_index = Interpreter::make_address(lines[i].tag, index);
+                mem.WriteBlock(begin_index, lines[i].data);
+                lines[i].valid = false;
             }
         }
-        UpdateLRU(address, time);
-        for (int i = 0; i < Constants::CACHE_WAY; ++i) {
-            if (lines[i].valid && lines[i].tag == tag) {
-                time_cnt[i] = time;
-                return {lines[i].ReadByte(offset), false};
-            }
-        }
-        throw std::runtime_error("smth went wrong");
     }
-
-    std::pair<uint16_t, bool> Read2Bytes(size_t address, size_t time) {
-        size_t tag = Interpreter::tag(address);
-        size_t offset = Interpreter::offset(address);
-        for (int i = 0; i < Constants::CACHE_WAY; ++i) {
-            if (lines[i].valid && lines[i].tag == tag) {
-                time_cnt[i] = time;
-                return {lines[i].Read2Bytes(offset), true};
-            }
-        }
-        UpdateLRU(address, time);
-        for (int i = 0; i < Constants::CACHE_WAY; ++i) {
-            if (lines[i].valid && lines[i].tag == tag) {
-                time_cnt[i] = time;
-                return {lines[i].Read2Bytes(offset), false};
-            }
-        }
-        throw std::runtime_error("smth went wrong");
+private:
+    void UpdateLine(size_t i) override {
+        time_cnt[i] = time++;
     }
-
-    std::pair<uint32_t, bool> Read4Bytes(size_t address, size_t time) {
-        size_t tag = Interpreter::tag(address);
-        size_t offset = Interpreter::offset(address);
-        for (int i = 0; i < Constants::CACHE_WAY; ++i) {
-            if (lines[i].valid && lines[i].tag == tag) {
-                time_cnt[i] = time;
-                return {lines[i].Read4Bytes(offset), true};
-            }
-        }
-        UpdateLRU(address, time);
-        for (int i = 0; i < Constants::CACHE_WAY; ++i) {
-            if (lines[i].valid && lines[i].tag == tag) {
-                time_cnt[i] = time;
-                return {lines[i].Read4Bytes(offset), false};
-            }
-        }
-        throw std::runtime_error("smth went wrong");
-    }
-
-    bool WriteByte(size_t address, uint8_t value, size_t time) {
-        size_t tag = Interpreter::tag(address);
-        size_t offset = Interpreter::offset(address);
-        for (int i = 0; i < Constants::CACHE_WAY; ++i) {
-            if (lines[i].valid && lines[i].tag == tag) {
-                time_cnt[i] = time;
-                lines[i].WriteByte(offset, value);
-                return true;
-            }
-        }
-        UpdateLRU(address, time);
-        for (int i = 0; i < Constants::CACHE_WAY; ++i) {
-            if (lines[i].valid && lines[i].tag == tag) {
-                time_cnt[i] = time;
-                lines[i].WriteByte(offset, value);
-                return false;
-            }
-        }
-        throw std::runtime_error("smth went wrong");
-    }
-
-    bool Write2Bytes(size_t address, uint16_t value, size_t time) {
-        size_t tag = Interpreter::tag(address);
-        size_t offset = Interpreter::offset(address);
-        for (int i = 0; i < Constants::CACHE_WAY; ++i) {
-            if (lines[i].valid && lines[i].tag == tag) {
-                time_cnt[i] = time;
-                lines[i].Write2Bytes(offset, value);
-                return true;
-            }
-        }
-        UpdateLRU(address, time);
-        for (int i = 0; i < Constants::CACHE_WAY; ++i) {
-            if (lines[i].valid && lines[i].tag == tag) {
-                time_cnt[i] = time;
-                lines[i].Write2Bytes(offset, value);
-                return false;
-            }
-        }
-        throw std::runtime_error("smth went wrong");
-    }
-
-    bool Write4Bytes(size_t address, uint32_t value, size_t time) {
-        size_t tag = Interpreter::tag(address);
-        size_t offset = Interpreter::offset(address);
-        for (int i = 0; i < Constants::CACHE_WAY; ++i) {
-            if (lines[i].valid && lines[i].tag == tag) {
-                time_cnt[i] = time;
-                lines[i].Write4Bytes(offset, value);
-                return true;
-            }
-        }
-        UpdateLRU(address, time);
-        for (int i = 0; i < Constants::CACHE_WAY; ++i) {
-            if (lines[i].valid && lines[i].tag == tag) {
-                time_cnt[i] = time;
-                lines[i].Write4Bytes(offset, value);
-                return false;
-            }
-        }
-        throw std::runtime_error("smth went wrong");
-    }
-
-    void UpdateLRU(size_t address, size_t time) {
+    void UpdateSet(size_t address) override {
         size_t index = 0;
         size_t diff = 0;
         size_t begin_index = (
@@ -220,8 +136,7 @@ public:
                 lines[i].data = mem.ReadBlock(begin_index, Constants::CACHE_LINE_SIZE);
                 lines[i].tag = Interpreter::tag(address);
                 lines[i].valid = true;
-                time_cnt[i] = time;
-
+                time_cnt[i] = time++;
                 return;
             }
             if (time - time_cnt[i] > diff) {
@@ -233,10 +148,22 @@ public:
         // std::cout << "CACHE OUT!\n";
         lines[index].data = mem.ReadBlock(begin_index, Constants::CACHE_LINE_SIZE);
         lines[index].tag = Interpreter::tag(address);
-        time_cnt[index] = time;
+        time_cnt[index] = time++;
+    }
+    std::vector<size_t> time_cnt;
+    Memory& mem;
+    size_t time;
+};
+
+class BitPLRUCacheSet : public BaseCacheSet {
+public:
+    BitPLRUCacheSet(Memory& mem_)
+    : mem(mem_) {
+        lines = std::vector<CacheLine>(Constants::CACHE_WAY);
+        pseudo_lru = std::vector<bool>(Constants::CACHE_WAY);
     }
 
-    void invalidate(int index) {
+    void invalidate(size_t index) override {
         for (int i = 0; i < Constants::CACHE_WAY; ++i) {
             if (lines[i].valid) {
                 uint32_t begin_index = Interpreter::make_address(lines[i].tag, index);
@@ -245,12 +172,43 @@ public:
             }
         }
     }
-
 private:
-    std::vector<CacheLine> lines;
-    std::vector<size_t> time_cnt;
+    void UpdateLine(size_t i) override {
+        size_t cnt = 0;
+        for (int j = 0; j < Constants::CACHE_WAY; ++j) {
+            if (j != i) {
+                cnt += pseudo_lru[j] ? 1 : 0;
+            }
+        }
+        if (cnt == Constants::CACHE_WAY - 1) {
+            pseudo_lru.assign(Constants::CACHE_WAY, false);
+        }
+        pseudo_lru[i] = true;
+    }
+
+    void UpdateSet(size_t address) override {
+        size_t index = 0;
+        size_t diff = 0;
+        size_t begin_index = (
+            address & ~((1ULL << Constants::CACHE_OFFSET_LEN) - 1)
+        );
+        for (int i = 0; i < Constants::CACHE_WAY; ++i) {
+            if (!lines[i].valid) {
+                lines[i].data = mem.ReadBlock(begin_index, Constants::CACHE_LINE_SIZE);
+                lines[i].tag = Interpreter::tag(address);
+                lines[i].valid = true;
+                return;
+            }
+            if (!pseudo_lru[i]) {
+                mem.WriteBlock(begin_index, lines[i].data);
+                lines[index].data = mem.ReadBlock(begin_index, Constants::CACHE_LINE_SIZE);
+                lines[index].tag = Interpreter::tag(address);
+                return;
+            }
+        }
+    }
+    std::vector<bool> pseudo_lru;
     Memory& mem;
-    Policy policy;
 };
 
 class Cache {
@@ -261,50 +219,48 @@ public:
     , hits_commands(0)
     , hits_data(0)
     , all_commands(0)
-    , all_data(0)
-    , total_time(0) {
-        sets_ = std::vector<CacheSet>(Constants::CACHE_SET_COUNT, CacheSet(policy, mem));
+    , all_data(0) {
+        if (policy_ == Policy::LRU) {
+            sets_.reserve(Constants::CACHE_SET_COUNT);
+            for (size_t i = 0; i < Constants::CACHE_SET_COUNT; ++i) {
+                sets_.emplace_back(std::make_unique<LRUCacheSet>(mem_));
+            }
+        }
     }
 
     uint8_t ReadByte(size_t address, bool is_command = false) {
-        auto [res, hit] = sets_[Interpreter::index(address)].ReadByte(address, total_time);
+        auto [res, hit] = sets_[Interpreter::index(address)]->ReadBytes<uint8_t>(address);
         Add(is_command, hit);
-        ++total_time;
         return res;
     }
 
     uint16_t Read2Bytes(size_t address, bool is_command = false) {
-        auto [res, hit] = sets_[Interpreter::index(address)].Read2Bytes(address, total_time);
+        auto [res, hit] = sets_[Interpreter::index(address)]->ReadBytes<uint16_t>(address);
         Add(is_command, hit);
-        ++total_time;
         return res;
     }
 
     uint32_t Read4Bytes(size_t address, bool is_command = false) {
         // std::cout << "reading on address: " << address << "; CacheSet: " << Interpreter::index(address) << "\n";
-        auto [res, hit] = sets_[Interpreter::index(address)].Read4Bytes(address, total_time);
+        auto [res, hit] = sets_[Interpreter::index(address)]->ReadBytes<uint32_t>(address);
         Add(is_command, hit);
-        ++total_time;
         return res;
     }
 
     void WriteByte(size_t address, uint8_t value) {
         // std::cout << "writing in address: " << Interpreter::index(address) << "; CacheSet: " << Interpreter::index(address) << "\n";
-        bool hit = sets_[Interpreter::index(address)].WriteByte(address, value, total_time);
+        bool hit = sets_[Interpreter::index(address)]->WriteBytes<uint8_t>(address, value);
         Add(false, hit);
-        ++total_time;
     }
 
     void Write2Bytes(size_t address, uint16_t value) {
-        bool hit = sets_[Interpreter::index(address)].Write2Bytes(address, value, total_time);
+        bool hit = sets_[Interpreter::index(address)]->WriteBytes<uint16_t>(address, value);
         Add(false, hit);
-        ++total_time;
     }
 
     void Write4Bytes(size_t address, uint32_t value) {
-        bool hit = sets_[Interpreter::index(address)].Write4Bytes(address, value, total_time);
+        bool hit = sets_[Interpreter::index(address)]->WriteBytes<uint32_t>(address, value);
         Add(false, hit);
-        ++total_time;
     }
 
     void Add(bool is_command, bool hit) {
@@ -337,7 +293,7 @@ public:
     void invalidate_all() {
         for (int i = 0; i < Constants::CACHE_SET_COUNT; ++i) {
             // std::cout << "set: " << i << "\n";
-            sets_[i].invalidate(i);
+            sets_[i]->invalidate(i);
         }
     }
 private:
@@ -345,8 +301,7 @@ private:
     size_t hits_data;
     size_t all_commands;
     size_t all_data;
-    size_t total_time;
     Policy policy_;
     Memory& mem_;
-    std::vector<CacheSet> sets_;
+    std::vector<std::unique_ptr<BaseCacheSet>> sets_;
 };
