@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iostream>
+#include <memory>
 #include "Memory.h"
 #include "Constants.h"
 
@@ -36,7 +37,8 @@ public:
 struct CacheLine {
     CacheLine() 
     : tag(0)
-    , valid(false) {
+    , valid(false)
+    , dirty(false) {
         data = std::vector<uint8_t>(Constants::CACHE_LINE_SIZE);
     }
 
@@ -51,6 +53,48 @@ struct CacheLine {
     bool valid;
     bool dirty;
 };
+
+template<>
+inline void CacheLine::WriteBytes<uint8_t>(size_t address, uint8_t value) {
+    data[address] = value;
+}
+
+template<>
+inline void CacheLine::WriteBytes<uint16_t>(size_t address, uint16_t value) {
+    data[address] = (uint8_t)(value & (0xFF));
+    data[address + 1] = (uint8_t)((value >> 8) & (0xFF));
+}
+
+template<>
+inline void CacheLine::WriteBytes<uint32_t>(size_t address, uint32_t value) {
+    data[address] = (uint8_t)(value & (0xFF));
+    data[address + 1] = (uint8_t)((value >> 8) & (0xFF));
+    data[address + 2] = (uint8_t)((value >> 16)& (0xFF));
+    data[address + 3] = (uint8_t)((value >> 24) & (0xFF));
+}
+
+template<>
+inline uint8_t CacheLine::ReadBytes<uint8_t>(size_t address) {
+    return data[address];
+}
+
+template<>
+inline uint16_t CacheLine::ReadBytes<uint16_t>(size_t address) {
+    size_t ans = 0;
+    ans |= (size_t)data[address];
+    ans |= ((size_t)data[address + 1] << 8);
+    return (uint16_t)ans;
+}
+
+template<>
+inline uint32_t CacheLine::ReadBytes<uint32_t>(size_t address) {
+    size_t ans = 0;
+    ans |= (size_t)data[address];
+    ans |= ((size_t)data[address + 1] << 8);
+    ans |= ((size_t)data[address + 2] << 16);
+    ans |= ((size_t)data[address + 3] << 24);
+    return ans;
+}
 
 class BaseCacheSet {
 public:
@@ -199,8 +243,6 @@ private:
     }
 
     void UpdateSet(size_t address) override {
-        size_t index = 0;
-        size_t diff = 0;
         size_t begin_index = (
             address & ~((1ULL << Constants::CACHE_OFFSET_LEN) - 1)
         );
@@ -230,12 +272,12 @@ private:
 class Cache {
 public:
     Cache(Policy policy, Memory& mem)
-    : policy_(policy)
-    , mem_(mem)
-    , hits_commands(0)
+    : hits_commands(0)
     , hits_data(0)
     , all_commands(0)
-    , all_data(0) {
+    , all_data(0) 
+    , policy_(policy)
+    , mem_(mem) {
         if (policy_ == Policy::LRU) {
             sets_.reserve(Constants::CACHE_SET_COUNT);
             for (size_t i = 0; i < Constants::CACHE_SET_COUNT; ++i) {

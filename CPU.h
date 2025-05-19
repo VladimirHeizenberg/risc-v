@@ -64,8 +64,8 @@ public:
     CPU(Cache& ram)
     : RAM(ram) {}
     CPU(std::istream& in, Cache& ram)
-    : RAM(ram)
-    , pc(0) {
+    : pc(0) 
+    , RAM(ram) {
         for (int i = 0; i < 32; ++i) {
             registers[i] = 0;
         }

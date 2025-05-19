@@ -1,5 +1,6 @@
 #include "CPU.h"
 
+#include <bitset>
 // Дай Бог чтоб работало
 
 void CPU::Execute(Instruction instruction) {
