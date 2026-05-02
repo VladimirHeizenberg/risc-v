@@ -3,10 +3,10 @@
 #include <vector>
 #include <cstdint>
 
-#include "Memory.h"
-#include "CPU.h"
-#include "Constants.h"
-#include "Cache.h"
+#include "emulator/Memory.h"
+#include "emulator/CPU.h"
+#include "emulator/Constants.h"
+#include "emulator/Cache.h"
 
 int main(int argc, char** argv) {
 
