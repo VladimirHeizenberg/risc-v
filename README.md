@@ -1,5 +1,7 @@
 # RISC-V Emulator
 
+![C++ Standard](https://img.shields.io/badge/C%2B%2B-23-blue.svg) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 An emulator of ISA RISC-V (RV32IM) with RAM and Cache.
 
 ## About
@@ -38,7 +40,7 @@ cmake --build . --target risc-v-emulator
 
 **Endianess:** little-endian
 
-**Important:** `a1` register is used as an `ra` register. Emulator finishes simulation when `pc` reaches value stored in `ra`.
+**Important:** Emulator finishes simulation when `pc` reaches value stored in `ra` in the beginning of the simulation or when `ecall/ebreak` is met. (`ra` *can* be changed during the simulation but for finishing only its initial state matters)
 
 ### Examples
 
