@@ -49,5 +49,3 @@ The `examples/` directory contains several pre-compiled programs and their assem
 * **`fill`**: Calculates squares for numbers 0–99 and writes the results to RAM starting at address `0x2000`. Perfect for verifying basic ALU and Store operations.
 * **`sort`**: Initializes an array of integers at `0x2000` and then sorts it using the **Bubble Sort** algorithm. This test validates complex control flow, nested loops, and memory load/store consistency.
 * **`cache`**: A specialized test case designed to verify cache policy efficiency. It is tuned to achieve specific hit rates: **96% for instructions** and **75% for data**, providing a benchmark for the LRU and bit-pLRU implementation.
-
-### How to generate your own .bins
